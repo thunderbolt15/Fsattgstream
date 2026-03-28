@@ -1,28 +1,16 @@
 # WebStreamer/bot/plugins/commands.py
+# Functions only — handlers registered in __main__.py
 
 import logging
-from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from WebStreamer.bot import StreamBot
 from WebStreamer.config import Var
 from WebStreamer.utils.secure_link import generate_token
 from WebStreamer.utils.file_info import get_media_info
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_MEDIA = (
-    filters.document
-    | filters.video
-    | filters.audio
-    | filters.voice
-    | filters.video_note
-    | filters.animation
-    | filters.photo
-)
 
-
-@StreamBot.on_message(filters.command("start") & filters.private)
 async def start_handler(client, message: Message):
     await message.reply_text(
         f"👋 **Hello {message.from_user.mention}!**\n\n"
@@ -37,7 +25,6 @@ async def start_handler(client, message: Message):
     )
 
 
-@StreamBot.on_message(filters.command("help") & filters.private)
 async def help_handler(client, message: Message):
     await message.reply_text(
         "**📖 How to use:**\n\n"
@@ -53,7 +40,6 @@ async def help_handler(client, message: Message):
     )
 
 
-@StreamBot.on_message(filters.command("status") & filters.private)
 async def status_handler(client, message: Message):
     from WebStreamer.bot import multi_clients
     await message.reply_text(
@@ -64,7 +50,6 @@ async def status_handler(client, message: Message):
     )
 
 
-@StreamBot.on_message(filters.command("getlink") & filters.private)
 async def getlink_handler(client, message: Message):
     args = message.text.strip().split()[1:]
     if not args:
@@ -74,6 +59,7 @@ async def getlink_handler(client, message: Message):
             "`/getlink 1234 5678 9012` — multiple"
         )
         return
+
     valid_ids = []
     for arg in args:
         try:
@@ -81,12 +67,14 @@ async def getlink_handler(client, message: Message):
         except ValueError:
             await message.reply_text(f"❌ `{arg}` valid number nahi hai.")
             return
-    processing = await message.reply_text(f"⏳ `{len(valid_ids)}` link(s) bana raha hoon...")
-    results = await _generate_links_for_ids(client, valid_ids, message.from_user.id)
+
+    processing = await message.reply_text(
+        f"⏳ `{len(valid_ids)}` link(s) bana raha hoon..."
+    )
+    results = await _generate_links(client, valid_ids, message.from_user.id)
     await _send_results(message, processing, results)
 
 
-@StreamBot.on_message(filters.command("bulklink") & filters.private)
 async def bulklink_handler(client, message: Message):
     args = message.text.strip().split()[1:]
     if len(args) != 2:
@@ -94,39 +82,56 @@ async def bulklink_handler(client, message: Message):
             "❌ **Usage:** `/bulklink 1001 1050`\nMax range: 200"
         )
         return
+
     try:
         start_id = int(args[0])
         end_id = int(args[1])
     except ValueError:
         await message.reply_text("❌ Valid numbers daao.")
         return
+
     if start_id > end_id:
         start_id, end_id = end_id, start_id
+
     total = end_id - start_id + 1
     if total > 200:
-        await message.reply_text(f"❌ Max 200 ek baar. `/bulklink {start_id} {start_id+199}`")
+        await message.reply_text(
+            f"❌ Max 200 ek baar.\n"
+            f"Try: `/bulklink {start_id} {start_id + 199}`"
+        )
         return
-    processing = await message.reply_text(f"⏳ **{total}** messages check kar raha hoon...")
+
+    processing = await message.reply_text(
+        f"⏳ **{total}** messages check kar raha hoon..."
+    )
     msg_ids = list(range(start_id, end_id + 1))
-    results = await _generate_links_for_ids(client, msg_ids, message.from_user.id, is_bulk=True)
+    results = await _generate_links(client, msg_ids, message.from_user.id, is_bulk=True)
     await _send_results(message, processing, results, is_bulk=True)
 
 
-@StreamBot.on_message(filters.private & SUPPORTED_MEDIA)
 async def media_handler(client, message: Message):
     processing_msg = await message.reply_text("⏳ Link bana raha hoon...")
     try:
         log_msg = await message.forward(Var.BIN_CHANNEL)
     except Exception as e:
         logger.error(f"Forward failed: {e}")
-        await processing_msg.edit_text("❌ File process nahi hui. Bot ko BIN_CHANNEL ka Admin banao.")
+        await processing_msg.edit_text(
+            "❌ File process nahi hui.\n"
+            "Bot ko BIN_CHANNEL ka Admin banao."
+        )
         return
+
     file_id, file_name, file_size = get_media_info(log_msg)
     if not file_id:
         await processing_msg.edit_text("❌ Unsupported file type.")
         return
-    token = generate_token(msg_id=log_msg.id, user_id=message.from_user.id if message.from_user else 0)
+
+    token = generate_token(
+        msg_id=log_msg.id,
+        user_id=message.from_user.id if message.from_user else 0,
+    )
     stream_url = f"{Var.FQDN}/{token}/{file_name}"
+
     await processing_msg.edit_text(
         f"✅ **Link Ready!**\n\n"
         f"📁 **File:** `{file_name}`\n"
@@ -139,19 +144,26 @@ async def media_handler(client, message: Message):
     )
 
 
-async def _generate_links_for_ids(client, msg_ids, user_id, is_bulk=False):
+# ── Helpers ───────────────────────────────────────────────
+
+async def _generate_links(client, msg_ids, user_id, is_bulk=False):
     results = []
     for i in range(0, len(msg_ids), 50):
-        batch = msg_ids[i:i+50]
+        batch = msg_ids[i:i + 50]
         try:
-            fetched = await client.get_messages(chat_id=Var.BIN_CHANNEL, message_ids=batch)
+            fetched = await client.get_messages(
+                chat_id=Var.BIN_CHANNEL,
+                message_ids=batch,
+            )
         except Exception as e:
             logger.error(f"get_messages failed: {e}")
             for mid in batch:
                 results.append(f"❌ ID `{mid}` — Fetch failed")
             continue
+
         if not isinstance(fetched, list):
             fetched = [fetched]
+
         for msg in fetched:
             if not msg or msg.empty:
                 continue
@@ -160,13 +172,20 @@ async def _generate_links_for_ids(client, msg_ids, user_id, is_bulk=False):
                 continue
             token = generate_token(msg_id=msg.id, user_id=user_id)
             link = f"{Var.FQDN}/{token}/{file_name}"
-            results.append(f"✅ `{file_name}`\n💾 {_format_size(file_size)}  |  📌 ID: `{msg.id}`\n🔗 `{link}`")
+            results.append(
+                f"✅ `{file_name}`\n"
+                f"💾 {_format_size(file_size)}  |  📌 ID: `{msg.id}`\n"
+                f"🔗 `{link}`"
+            )
     return results
 
 
 async def _send_results(message, processing_msg, results, is_bulk=False):
     if not results:
-        await processing_msg.edit_text("❌ Koi media nahi mila.\nBIN_CHANNEL ID check karo, bot admin hona chahiye.")
+        await processing_msg.edit_text(
+            "❌ Koi media nahi mila.\n"
+            "BIN_CHANNEL ID check karo, bot admin hona chahiye."
+        )
         return
     success = sum(1 for r in results if r.startswith("✅"))
     header = f"**✅ {success}/{len(results)} links ready!**\n\n"

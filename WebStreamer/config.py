@@ -1,19 +1,16 @@
 # WebStreamer/config.py
 # ─────────────────────────────────────────────
-#  All config variables from environment
+#  All config variables from environment (Railway compatible)
 # ─────────────────────────────────────────────
 
 import os
 import sys
-from dotenv import load_dotenv
-
-load_dotenv(".env")
 
 
 def _require(key: str) -> str:
-    val = os.getenv(key, "").strip()
+    val = os.environ.get(key, "").strip()
     if not val:
-        print(f"[ERROR] Required variable '{key}' is missing in .env")
+        print(f"[ERROR] Required variable '{key}' is missing in environment")
         sys.exit(1)
     return val
 
@@ -28,9 +25,9 @@ class Var:
     SECRET_KEY: str = _require("SECRET_KEY")
 
     # ── Optional ──────────────────────────────
-    PORT: int = int(os.getenv("PORT", "8080"))
-    HAS_SSL: bool = os.getenv("HAS_SSL", "True").lower() == "true"
-    LINK_EXPIRY_HOURS: int = int(os.getenv("LINK_EXPIRY_HOURS", "24"))
+    PORT: int = int(os.environ.get("PORT", "8080"))
+    HAS_SSL: bool = os.environ.get("HAS_SSL", "True").lower() == "true"
+    LINK_EXPIRY_HOURS: int = int(os.environ.get("LINK_EXPIRY_HOURS", "24"))
 
     # ── Multi-bot worker tokens ───────────────
     MULTI_TOKENS: list[str] = []
@@ -39,7 +36,7 @@ class Var:
     def load_multi_tokens(cls):
         i = 1
         while True:
-            token = os.getenv(f"MULTI_TOKEN{i}", "").strip()
+            token = os.environ.get(f"MULTI_TOKEN{i}", "").strip()
             if not token:
                 break
             cls.MULTI_TOKENS.append(token)

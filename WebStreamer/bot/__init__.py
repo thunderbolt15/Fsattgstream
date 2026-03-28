@@ -1,8 +1,8 @@
 # WebStreamer/bot/__init__.py
 
 import asyncio
-import logging
 import itertools
+import logging
 from typing import List
 
 from pyrogram import Client
@@ -10,6 +10,7 @@ from WebStreamer.config import Var
 
 logger = logging.getLogger(__name__)
 
+# Main bot — NO plugins parameter, handlers registered manually in __main__.py
 StreamBot = Client(
     name="StreamBot",
     api_id=Var.API_ID,
@@ -46,31 +47,6 @@ class MultiClientManager:
 
 
 multi_clients = MultiClientManager()
-
-
-async def initialize_clients():
-    from WebStreamer.bot.plugins import commands  # noqa
-    await StreamBot.start()
-    me = await StreamBot.get_me()
-    logger.info(f"Main bot started: @{me.username}")
-    multi_clients.add(StreamBot)
-    for i, token in enumerate(Var.MULTI_TOKENS, start=1):
-        try:
-            worker = Client(
-                name=f"Worker_{i}",
-                api_id=Var.API_ID,
-                api_hash=Var.API_HASH,
-                bot_token=token,
-                sleep_threshold=10,
-                no_updates=True,
-            )
-            await worker.start()
-            worker_me = await worker.get_me()
-            multi_clients.add(worker)
-            logger.info(f"Worker bot {i} started: @{worker_me.username}")
-        except Exception as e:
-            logger.error(f"Failed to start worker bot {i}: {e}")
-    logger.info(f"Total clients ready: {multi_clients.count}")
 
 
 async def stop_clients():

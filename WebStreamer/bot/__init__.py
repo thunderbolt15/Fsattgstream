@@ -10,8 +10,6 @@ from WebStreamer.config import Var
 
 logger = logging.getLogger(__name__)
 
-# ── Main bot client ───────────────────────────────────────
-# plugins path: "WebStreamer.bot.plugins" (dot notation — works on Railway)
 StreamBot = Client(
     name="StreamBot",
     api_id=Var.API_ID,
@@ -19,11 +17,9 @@ StreamBot = Client(
     bot_token=Var.BOT_TOKEN,
     sleep_threshold=10,
     no_updates=False,
-    plugins=dict(root="WebStreamer.bot.plugins"),
 )
 
 
-# ── Multi-bot manager ─────────────────────────────────────
 class MultiClientManager:
     def __init__(self):
         self._clients: List[Client] = []
@@ -53,14 +49,11 @@ multi_clients = MultiClientManager()
 
 
 async def initialize_clients():
-    """Start main bot + all worker bots."""
+    from WebStreamer.bot.plugins import commands  # noqa
     await StreamBot.start()
     me = await StreamBot.get_me()
     logger.info(f"Main bot started: @{me.username}")
-
     multi_clients.add(StreamBot)
-
-    # Worker bots (optional)
     for i, token in enumerate(Var.MULTI_TOKENS, start=1):
         try:
             worker = Client(
@@ -77,7 +70,6 @@ async def initialize_clients():
             logger.info(f"Worker bot {i} started: @{worker_me.username}")
         except Exception as e:
             logger.error(f"Failed to start worker bot {i}: {e}")
-
     logger.info(f"Total clients ready: {multi_clients.count}")
 
 

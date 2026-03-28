@@ -62,6 +62,16 @@ async def main():
     logger.info("  FastStreamBot Starting...")
     logger.info("=" * 50)
 
+    # 🛑 Ensure Webhook is deleted because Pyrogram uses MTProto
+    # If a previous webhook was stuck, Telegram drops MTProto updates silently!
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.telegram.org/bot{Var.BOT_TOKEN}/deleteWebhook?drop_pending_updates=True") as resp:
+                logger.info(f"Webhook Clear Response: {await resp.text()}")
+    except Exception as e:
+        logger.warning(f"Failed to clear webhook: {e}")
+
     # Start bot
     await StreamBot.start()
     me = await StreamBot.get_me()
